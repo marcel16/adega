@@ -1,0 +1,241 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Tenant / Cliente (dono da adega) ──
+model Cliente {
+  id            String    @id @default(uuid())
+  nome          String
+  email         String    @unique
+  senha         String
+  nomeAdega     String
+  slug          String    @unique
+  logo          String?
+  marcaDagua    String?
+  posicaoMarca  String    @default("bottom-right") // top-left, top-right, bottom-left, bottom-right, center
+  corMarca      String    @default("#ffffff80")
+  ativo         Boolean   @default(true)
+  planoId       String?
+  plano         Plano?    @relation(fields: [planoId], references: [id])
+  dataExpiracao DateTime?
+  criadoEm      DateTime  @default(now())
+  atualizadoEm  DateTime  @updatedAt
+
+  tvs        TV[]
+  promocoes  Promocao[]
+  midias     Midia[]
+  playlists  Playlist[]
+  faturas    Fatura[]
+  notificacoes Notificacao[]
+  asaasCustomerId String?
+
+  @@map("clientes")
+}
+
+// ── Planos / Assinaturas ──
+model Plano {
+  id            String    @id @default(uuid())
+  nome          String
+  descricao     String?
+  valorMensal   Decimal   @db.Decimal(10, 2)
+  valorAnual    Decimal   @db.Decimal(10, 2)
+  modulos       String[]  // ["promocoes", "youtube", "audio", "agenda", "relatorios"]
+  maxTVs        Int       @default(1)
+  maxPromocoes  Int       @default(10)
+  maxMidias     Int       @default(50)
+  permiteCampanhasDev  Boolean @default(false)
+  ativo         Boolean   @default(true)
+  criadoEm      DateTime  @default(now())
+
+  clientes  Cliente[]
+
+  @@map("planos")
+}
+
+// ── TVs Conectadas ──
+model TV {
+  id          String    @id @default(uuid())
+  clienteId   String
+  cliente     Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  numero      Int       // identificador: tv1, tv2, etc
+  nome        String?
+  token       String    @unique @default(uuid())
+  ativa       Boolean   @default(true)
+  ultimoAcesso DateTime?
+  criadoEm    DateTime  @default(now())
+
+  @@unique([clienteId, numero])
+  @@map("tvs")
+}
+
+// ── Promoções ──
+model Promocao {
+  id            String    @id @default(uuid())
+  clienteId     String
+  cliente       Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  titulo        String
+  descricao     String?
+  tipo          String    @default("overlay") // overlay, fullscreen, ticker
+  duracao       Int       @default(10) // segundos
+  posicao       String    @default("bottom") // top, bottom, center, fullscreen
+  corFundo      String    @default("#000000cc")
+  corTexto       String    @default("#ffffff")
+  tamanhoFonte  Int       @default(24)
+  imagemUrl     String?
+  somUrl        String?
+  ativa         Boolean   @default(true)
+  agendada      Boolean   @default(false)
+  dataInicio    DateTime?
+  dataFim       DateTime?
+  diasSemana    Int[]?    // 0=dom, 1=seg... 6=sab
+  horaInicio    String?   // HH:mm
+  horaFim       String?   // HH:mm
+  prioridade    Int       @default(0)
+  criadoEm      DateTime  @default(now())
+  atualizadoEm  DateTime  @updatedAt
+
+  playlists  PlaylistPromocao[]
+
+  @@map("promocoes")
+}
+
+// ── Mídias (vídeos, imagens, sons) ──
+model Midia {
+  id          String    @id @default(uuid())
+  clienteId   String
+  cliente     Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  titulo      String
+  tipo        String    // video, imagem, som, youtube
+  url         String    // caminho local ou URL do YouTube
+  thumbnailUrl String?
+  duracao     Int?      // segundos (para vídeos)
+  tamanho     BigInt?   // bytes
+  status      String    @default("processing") // pending, processing, ready, error
+  origem      String    @default("upload") // upload, youtube
+  youtubeId   String?
+  metadata    Json?     // metadados extras (resolução, codec, etc)
+  criadoEm    DateTime  @default(now())
+
+  playlists PlaylistMidia[]
+
+  @@map("midias")
+}
+
+// ── Playlists (sequências de reprodução por TV) ──
+model Playlist {
+  id        String    @id @default(uuid())
+  clienteId String
+  cliente   Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  nome      String
+  padrao    Boolean   @default(false) // playlist padrão da TV
+  criadoEm  DateTime  @default(now())
+
+  midias      PlaylistMidia[]
+  promocoes   PlaylistPromocao[]
+  tvs         TV[]? // TVs que usam esta playlist
+
+  @@map("playlists")
+}
+
+model PlaylistMidia {
+  id          String   @id @default(uuid())
+  playlistId  String
+  playlist    Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  midiaId     String
+  midia       Midia    @relation(fields: [midiaId], references: [id], onDelete: Cascade)
+  ordem       Int
+  criadoEm    DateTime @default(now())
+
+  @@unique([playlistId, midiaId])
+  @@map("playlist_midias")
+}
+
+model PlaylistPromocao {
+  id          String   @id @default(uuid())
+  playlistId  String
+  playlist    Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  promocaoId  String
+  promocao    Promocao @relation(fields: [promocaoId], references: [id], onDelete: Cascade)
+  frequencia  Int      @default(1) // a cada quantos vídeos
+  criadoEm    DateTime @default(now())
+
+  @@unique([playlistId, promocaoId])
+  @@map("playlist_promocoes")
+}
+
+// ── Campanhas do Desenvolvedor (Admin) ──
+model CampanhaDev {
+  id          String    @id @default(uuid())
+  titulo      String
+  tipo        String    // video, imagem, overlay
+  url         String
+  duracao     Int?
+  ativa       Boolean   @default(true)
+  agendada    Boolean   @default(false)
+  dataInicio  DateTime?
+  dataFim     DateTime?
+  aleatoria   Boolean   @default(false) // exibição aleatória
+  frequencia  Int       @default(3)     // a cada quantos vídeos
+  clientesAlvo String[]? // IDs de clientes específicos (vazio = todos)
+  planosAlvo  String[]?  // IDs de planos específicos (vazio = todos)
+  criadoEm    DateTime  @default(now())
+
+  @@map("campanhas_dev")
+}
+
+// ── Faturas / Pagamentos (Asaas) ──
+model Fatura {
+  id              String    @id @default(uuid())
+  clienteId       String
+  cliente         Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  asaasPaymentId  String?
+  valor           Decimal   @db.Decimal(10, 2)
+  status          String    @default("pending") // pending, confirmed, overdue, canceled
+  dataVencimento  DateTime
+  dataPagamento   DateTime?
+  tipo            String    @default("assinatura") // assinatura, avulso
+  descricao       String?
+  criadoEm        DateTime  @default(now())
+
+  @@map("faturas")
+}
+
+// ── Notificações ──
+model Notificacao {
+  id        String    @id @default(uuid())
+  clienteId String
+  cliente   Cliente   @relation(fields: [clienteId], references: [id], onDelete: Cascade)
+  titulo    String
+  mensagem  String
+  tipo      String    @default("info") // info, warning, success, promo, admin
+  lida      Boolean   @default(false)
+  criadoEm  DateTime  @default(now())
+
+  @@map("notificacoes")
+}
+
+// ── Admin (Superadmin) ──
+model Admin {
+  id        String    @id @default(uuid())
+  nome      String
+  email     String    @unique
+  senha     String
+  role      String    @default("admin") // admin, superadmin
+  criadoEm  DateTime  @default(now())
+
+  @@map("admins")
+}
+
+// ── Configurações do Sistema ──
+model Configuracao {
+  id    String @id @default(uuid())
+  chave String @unique
+  valor String
+
+  @@map("configuracoes")
+}
