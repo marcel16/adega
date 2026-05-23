@@ -74,7 +74,7 @@ router.get('/clientes', adminOnly, async (req: AuthRequest, res: Response) => {
   ]);
 
   return res.json({
-    data: clientes.map(({ senha: _, ...c }) => c),
+    data: clientes.map(({ senha: _senha, ...c }: any) => c),
     total,
     page,
     totalPages: Math.ceil(total / limit),
@@ -174,7 +174,7 @@ router.post('/notificar', adminOnly, async (req: AuthRequest, res: Response) => 
   // Broadcast para todos
   const clientes = await prisma.cliente.findMany({ select: { id: true } });
   await prisma.notificacao.createMany({
-    data: clientes.map((c) => ({
+    data: clientes.map((c: { id: string }) => ({
       clienteId: c.id,
       titulo,
       mensagem,
