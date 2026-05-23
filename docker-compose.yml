@@ -73,3 +73,4 @@ networks:
   default:
     name: coolify
     external: true
+# Deploy trigger 1779552480
