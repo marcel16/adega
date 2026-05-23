@@ -92,7 +92,7 @@ model Promocao {
   agendada      Boolean   @default(false)
   dataInicio    DateTime?
   dataFim       DateTime?
-  diasSemana    Int[]?    // 0=dom, 1=seg... 6=sab
+  diasSemana    Int[]     @default([]) // 0=dom, 1=seg... 6=sab
   horaInicio    String?   // HH:mm
   horaFim       String?   // HH:mm
   prioridade    Int       @default(0)
@@ -137,7 +137,7 @@ model Playlist {
 
   midias      PlaylistMidia[]
   promocoes   PlaylistPromocao[]
-  tvs         TV[]? // TVs que usam esta playlist
+  tvs         TV[] // TVs que usam esta playlist
 
   @@map("playlists")
 }
@@ -181,8 +181,8 @@ model CampanhaDev {
   dataFim     DateTime?
   aleatoria   Boolean   @default(false) // exibição aleatória
   frequencia  Int       @default(3)     // a cada quantos vídeos
-  clientesAlvo String[]? // IDs de clientes específicos (vazio = todos)
-  planosAlvo  String[]?  // IDs de planos específicos (vazio = todos)
+  clientesAlvo String[] // IDs de clientes específicos (vazio = todos)
+  planosAlvo  String[]  // IDs de planos específicos (vazio = todos)
   criadoEm    DateTime  @default(now())
 
   @@map("campanhas_dev")
