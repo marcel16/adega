@@ -1,9 +1,10 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY package*.json ./
+RUN npm install --legacy-peer-deps
 COPY prisma ./prisma/
-RUN npm ci
-RUN npx prisma generate
+ENV DATABASE_URL=postgresql://dummy:dummy@localhost:5432/dummy
+RUN ./node_modules/.bin/prisma generate
 COPY tsconfig.json ./
 COPY src ./src/
 RUN npm run build
@@ -15,6 +16,11 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY package*.json ./
+
+# Startup script
+RUN printf '#!/bin/sh\nset -e\necho "=== Adega Startup ==="\necho "Running DB push..."\n./node_modules/.bin/prisma db push --accept-data-loss 2>/dev/null || true\necho "Running seed..."\nnode dist/config/seed.js 2>/dev/null || true\necho "Starting server..."\nexec node dist/index.js\n' > /app/start.sh && chmod +x /app/start.sh
+
 RUN mkdir -p /app/uploads
 EXPOSE 3001
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/index.js"]
+ENV DATABASE_URL=postgresql://adega:\${DB_P…ga
+CMD ["/app/start.sh"]

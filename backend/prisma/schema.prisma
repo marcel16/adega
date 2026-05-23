@@ -1,5 +1,6 @@
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -137,7 +138,6 @@ model Playlist {
 
   midias      PlaylistMidia[]
   promocoes   PlaylistPromocao[]
-  tvs         TV[] // TVs que usam esta playlist
 
   @@map("playlists")
 }

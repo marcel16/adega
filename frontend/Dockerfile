@@ -1,7 +1,7 @@
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+RUN npm install --legacy-peer-deps
 COPY . .
 RUN npm run build
 
@@ -12,5 +12,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/next.config.js ./
+ENV PORT=3002
+ENV HOSTNAME=0.0.0.0
 EXPOSE 3002
-CMD ["npx", "next", "start", "-p", "3002"]
+CMD ["node", ".next/standalone/server.js"]
