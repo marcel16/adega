@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { ExternalLink } from 'lucide-react';
 
 const API = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -46,7 +47,15 @@ export default function Admin() {
     { id: 'dashboard', label: '📊 Dashboard' },
     { id: 'clientes', label: '👥 Clientes' },
     { id: 'planos', label: '💎 Planos' },
-    { id: 'campanhas', label: '📢 Campanhas' },
+  ];
+
+  const navLinks = [
+    { id: 'dashboard', label: '📊 Dashboard' },
+    { id: 'clientes', label: '👥 Clientes' },
+    { id: 'planos', label: '💎 Planos' },
+    { href: '/admin/campanhas', label: '📢 Campanhas' },
+    { href: '/admin/faturas', label: '💰 Faturas' },
+    { href: '/admin/notificar', label: '🔔 Notificar' },
   ];
 
   if (!dashboard) return <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">Carregando...</div>;
@@ -60,13 +69,18 @@ export default function Admin() {
           <p className="text-xs text-gray-500 mt-1">Painel de Administração</p>
         </div>
         <nav className="flex flex-col gap-1 flex-1">
-          {tabs.map(t => (
+          {navLinks.map(item => (
             <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`text-left px-3 py-2 rounded-lg text-sm transition ${tab === t.id ? 'bg-amber-600/20 text-amber-400' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+              key={item.id || item.href}
+              onClick={() => item.href ? router.push(item.href) : setTab(item.id!)}
+              className={`text-left px-3 py-2 rounded-lg text-sm transition flex items-center justify-between ${
+                (item.id && tab === item.id) || (item.href && router.pathname === item.href)
+                  ? 'bg-amber-600/20 text-amber-400'
+                  : 'text-gray-400 hover:text-white hover:bg-gray-800'
+              }`}
             >
-              {t.label}
+              <span>{item.label}</span>
+              {item.href && <ExternalLink size={12} className="opacity-40" />}
             </button>
           ))}
         </nav>
@@ -115,7 +129,11 @@ export default function Admin() {
                 </thead>
                 <tbody>
                   {clientes.map(c => (
-                    <tr key={c.id} className="border-t border-gray-800 hover:bg-gray-800/50">
+                    <tr
+                      key={c.id}
+                      onClick={() => router.push(`/admin/clientes/${c.id}`)}
+                      className="border-t border-gray-800 hover:bg-gray-800/50 cursor-pointer"
+                    >
                       <td className="px-4 py-3 font-medium">{c.nomeAdega}</td>
                       <td className="px-4 py-3 text-sm text-gray-400">{c.nome}</td>
                       <td className="px-4 py-3 text-sm">{c.plano?.nome || '—'}</td>

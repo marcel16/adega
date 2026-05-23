@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuid } from 'uuid';
+import { enqueueMediaProcessing, enqueueYoutubeDownload } from '../config/queue';
 
 const prisma = new PrismaClient();
 const router = Router();
@@ -54,19 +55,37 @@ router.post('/upload', upload.single('file'), async (req: AuthRequest, res: Resp
     : req.file.mimetype.startsWith('image/') ? 'imagem'
     : 'som';
 
+  const uploadDir = process.env.UPLOAD_DIR || '/app/uploads';
+  const filePath = path.join(uploadDir, req.file.filename);
   const url = `/uploads/${req.file.filename}`;
 
   const midia = await prisma.midia.create({
     data: {
-      clienteId: req.clienteId,
+      clienteId: req.clienteId!,
       titulo: req.body.titulo || req.file.originalname,
       tipo,
       url,
       tamanho: req.file.size,
-      status: tipo === 'video' ? 'processing' : 'ready',
+      status: tipo === 'video' ? 'pending' : 'ready',
       origem: 'upload',
     },
   });
+
+  // Enqueue video processing for videos
+  if (tipo === 'video') {
+    try {
+      await enqueueMediaProcessing({
+        midiaId: midia.id,
+        clienteId: req.clienteId!,
+        filePath,
+        tipo: 'video',
+      });
+      console.log(`[Midias] Enqueued video processing for ${midia.id}`);
+    } catch (err) {
+      console.error('[Midias] Failed to enqueue media processing:', (err as Error).message);
+      // Don't fail the upload — midia is saved, just won't be auto-processed
+    }
+  }
 
   return res.status(201).json(midia);
 });
@@ -83,19 +102,30 @@ router.post('/youtube', async (req: AuthRequest, res: Response) => {
 
   const midia = await prisma.midia.create({
     data: {
-      clienteId: req.clienteId,
+      clienteId: req.clienteId!,
       titulo: titulo || `YouTube - ${youtubeId}`,
       tipo: 'youtube',
       url: youtubeUrl,
       origem: 'youtube',
       youtubeId,
-      status: 'processing',
+      status: 'pending',
     },
   });
 
-  // Jobs em background: download + processamento
-  // O BullMQ worker vai processar isso
-  // mas por enquanto marcamos como pronto com a URL do embed
+  // Enqueue YouTube download job
+  try {
+    await enqueueYoutubeDownload({
+      midiaId: midia.id,
+      clienteId: req.clienteId!,
+      youtubeId,
+      youtubeUrl,
+    });
+    console.log(`[Midias] Enqueued YouTube download for ${midia.id} (${youtubeId})`);
+  } catch (err) {
+    console.error('[Midias] Failed to enqueue YouTube download:', (err as Error).message);
+    // Don't fail — midia is saved
+  }
+
   return res.status(201).json(midia);
 });
 

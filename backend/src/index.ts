@@ -17,6 +17,8 @@ import { m3uRouter } from './routes/m3u';
 import { webhookRouter } from './routes/webhook';
 import { errorHandler } from './middleware/errorHandler';
 import { authenticate } from './middleware/auth';
+import { startAllWorkers, stopAllWorkers } from './workers';
+import { startAllCronJobs, stopAllCronJobs } from './cron';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -62,9 +64,55 @@ app.use('/uploads', express.static(process.env.UPLOAD_DIR || '/app/uploads'));
 // Error handler
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
   console.log(`[Adega] Backend rodando na porta ${PORT}`);
   console.log(`[Adega] Ambiente: ${process.env.NODE_ENV || 'development'}`);
+
+  // Iniciar workers (BullMQ) — apenas se não estiver em modo API-only
+  if (process.env.WORKERS_ENABLED !== 'false') {
+    try {
+      const workerStatus = await startAllWorkers();
+      console.log('[Adega] Workers iniciados:', workerStatus);
+    } catch (err) {
+      console.error('[Adega] Erro ao iniciar workers:', (err as Error).message);
+      console.warn('[Adega] Continuando sem workers — configure Redis para processamento assíncrono');
+    }
+  } else {
+    console.log('[Adega] Workers desabilitados (WORKERS_ENABLED=false)');
+  }
+
+  // Iniciar cron jobs — apenas se não desabilitado
+  if (process.env.CRON_ENABLED !== 'false') {
+    try {
+      startAllCronJobs();
+      console.log('[Adega] Cron jobs iniciados');
+    } catch (err) {
+      console.error('[Adega] Erro ao iniciar cron jobs:', (err as Error).message);
+    }
+  } else {
+    console.log('[Adega] Cron desabilitado (CRON_ENABLED=false)');
+  }
+});
+
+// ── Graceful shutdown ──
+process.on('SIGTERM', async () => {
+  console.log('[Adega] SIGTERM recebido — desligando graciosamente...');
+  stopAllCronJobs();
+  await stopAllWorkers();
+  server.close(() => {
+    console.log('[Adega] Servidor fechado');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', async () => {
+  console.log('[Adega] SIGINT recebido — desligando...');
+  stopAllCronJobs();
+  await stopAllWorkers();
+  server.close(() => {
+    console.log('[Adega] Servidor fechado');
+    process.exit(0);
+  });
 });
 
 export default app;
